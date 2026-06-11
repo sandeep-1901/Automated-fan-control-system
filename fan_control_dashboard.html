@@ -1,0 +1,260 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); }
+  .root { padding: 1rem 0; }
+  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 1.5rem; }
+  .header h1 { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+  .header .sub { font-size: 13px; color: var(--color-text-secondary); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #68d391; flex-shrink: 0; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
+  .dot.off { background: var(--color-text-tertiary); animation: none; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+  .metric { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 14px 16px; border: 0.5px solid var(--color-border-tertiary); }
+  .metric .val { font-size: 28px; font-weight: 500; line-height: 1.1; }
+  .metric .lbl { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; text-transform: uppercase; letter-spacing: .05em; }
+  .metric.temp .val { color: #E24B4A; }
+  .metric.hum  .val { color: #378ADD; }
+  .metric.thr  .val { color: #BA7517; }
+  .metric.fan .val  { font-size: 20px; }
+  .metric.fan.on .val  { color: #639922; }
+  .metric.fan.off .val { color: var(--color-text-tertiary); }
+  .bar-wrap { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 14px 16px; margin-bottom: 1.25rem; border: 0.5px solid var(--color-border-tertiary); }
+  .bar-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .bar-track { height: 8px; background: var(--color-border-tertiary); border-radius: 4px; position: relative; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 4px; transition: width .5s, background .5s; }
+  .thr-marker { position: absolute; top: -4px; height: 16px; width: 2px; background: #BA7517; border-radius: 1px; transition: left .5s; }
+  .section { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 16px; border: 0.5px solid var(--color-border-tertiary); margin-bottom: 1.25rem; }
+  .section-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 14px; text-transform: uppercase; letter-spacing: .05em; display: flex; justify-content: space-between; align-items: center; }
+  .badge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 99px; }
+  .badge.auto   { background: var(--color-background-success); color: var(--color-text-success); }
+  .badge.manual { background: var(--color-background-warning); color: var(--color-text-warning); }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .row:last-child { margin-bottom: 0; }
+  .row label { font-size: 13px; color: var(--color-text-secondary); min-width: 110px; }
+  .btn-group { display: flex; gap: 6px; }
+  button { background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); color: var(--color-text-primary); border-radius: var(--border-radius-md); padding: 7px 14px; cursor: pointer; font-size: 13px; font-family: var(--font-sans); transition: background .15s; }
+  button:hover { background: var(--color-background-secondary); }
+  button:active { transform: scale(.98); }
+  button.active { background: var(--color-background-info); border-color: var(--color-border-info); color: var(--color-text-info); }
+  button.success { background: var(--color-background-success); border-color: var(--color-border-success); color: var(--color-text-success); }
+  button.danger  { background: var(--color-background-danger);  border-color: var(--color-border-danger);  color: var(--color-text-danger);  }
+  .thr-control { display: flex; align-items: center; gap: 8px; }
+  .thr-btn { width: 32px; height: 32px; padding: 0; font-size: 18px; font-weight: 500; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .thr-val { font-size: 22px; font-weight: 500; min-width: 52px; text-align: center; color: #BA7517; }
+  .thr-unit { font-size: 13px; color: var(--color-text-secondary); }
+  .history { height: 80px; width: 100%; }
+  .toast { font-size: 12px; color: var(--color-text-success); min-height: 18px; text-align: center; margin-top: 4px; transition: opacity .3s; }
+  .lcd { background: #1a2a1a; border-radius: 8px; border: 1.5px solid #3a4a3a; padding: 10px 14px; font-family: monospace; font-size: 14px; letter-spacing: .1em; color: #7ef07e; line-height: 1.8; }
+  .lcd .row0, .lcd .row1 { display: block; }
+  .divider { border: none; border-top: 0.5px solid var(--color-border-tertiary); margin: 0 0 1.25rem; }
+</style>
+
+<div class="root">
+  <div class="header">
+    <div class="dot" id="conn-dot"></div>
+    <div>
+      <h1>Fan Control System</h1>
+      <div class="sub">ESP32 · DHT11 · Relay · I2C LCD</div>
+    </div>
+  </div>
+
+  <!-- Metric cards -->
+  <div class="metrics">
+    <div class="metric temp"><div class="val" id="m-temp">27.4</div><div class="lbl">Temperature °C</div></div>
+    <div class="metric hum"><div class="val" id="m-hum">62</div><div class="lbl">Humidity %</div></div>
+    <div class="metric fan on" id="m-fan"><div class="val" id="m-fan-val">ON ✓</div><div class="lbl">Fan Status</div></div>
+    <div class="metric thr"><div class="val" id="m-thr">28</div><div class="lbl">Threshold °C</div></div>
+  </div>
+
+  <!-- Temperature bar -->
+  <div class="bar-wrap">
+    <div class="bar-label">
+      <span>Temperature vs. Threshold</span>
+      <span id="bar-legend" style="color:#E24B4A">27.4°C / 28°C</span>
+    </div>
+    <div class="bar-track">
+      <div class="bar-fill" id="bar-fill" style="width:55%; background:#378ADD"></div>
+      <div class="thr-marker" id="thr-marker" style="left:56%"></div>
+    </div>
+  </div>
+
+  <!-- Threshold control -->
+  <div class="section">
+    <div class="section-title">Threshold Control <span class="badge auto" id="mode-badge">AUTO</span></div>
+    <div class="row">
+      <label>Set threshold</label>
+      <div class="thr-control">
+        <button class="thr-btn" onclick="changeThreshold(-1)">−</button>
+        <span class="thr-val" id="thr-display">28</span>
+        <span class="thr-unit">°C</span>
+        <button class="thr-btn" onclick="changeThreshold(+1)">+</button>
+        <button onclick="saveThreshold()" style="margin-left:4px">Save</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>Mode</label>
+      <div class="btn-group">
+        <button id="btn-auto"   class="active" onclick="setMode('auto')">Auto</button>
+        <button id="btn-manual" onclick="setMode('manual')">Manual</button>
+      </div>
+    </div>
+    <div class="row" id="manual-row" style="display:none">
+      <label>Fan override</label>
+      <div class="btn-group">
+        <button class="success" onclick="setFan(true)">Turn ON</button>
+        <button class="danger"  onclick="setFan(false)">Turn OFF</button>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <!-- LCD preview -->
+  <div class="section">
+    <div class="section-title">LCD Display Preview</div>
+    <div class="lcd">
+      <span class="row0" id="lcd-row0">T:27.4°C  H:62%  </span>
+      <span class="row1" id="lcd-row1">Set:28°C  FAN ON A</span>
+    </div>
+  </div>
+
+  <!-- Mini sparkline chart -->
+  <div class="section">
+    <div class="section-title">Temperature History (30s window)</div>
+    <canvas class="history" id="sparkline"></canvas>
+  </div>
+
+</div>
+
+<script>
+let threshold = 28;
+let autoMode  = true;
+let manFan    = false;
+let temperature = 27.4;
+let humidity    = 62;
+let fanOn = true;
+const history = Array.from({length:30}, (_,i) => 24 + Math.sin(i*0.4)*4);
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  setTimeout(() => el.textContent = '', 2500);
+}
+
+function updateUI() {
+  // Simulate live sensor fluctuation
+  temperature = Math.max(20, Math.min(40, temperature + (Math.random()-.45)*0.4));
+  humidity    = Math.max(30, Math.min(90, humidity    + (Math.random()-.5)*0.8));
+  history.shift(); history.push(temperature);
+
+  if (autoMode) fanOn = temperature >= threshold;
+  else          fanOn = manFan;
+
+  // Metric cards
+  document.getElementById('m-temp').textContent = temperature.toFixed(1);
+  document.getElementById('m-hum').textContent  = Math.round(humidity);
+  document.getElementById('m-thr').textContent  = threshold;
+  const fanCard = document.getElementById('m-fan');
+  const fanVal  = document.getElementById('m-fan-val');
+  fanCard.className = 'metric fan ' + (fanOn ? 'on' : 'off');
+  fanVal.textContent = fanOn ? 'ON ✓' : 'OFF';
+
+  // Bar
+  const pct = Math.min(100, Math.max(0, (temperature / 50) * 100));
+  const tpct = Math.min(100, (threshold / 50) * 100);
+  const fill = document.getElementById('bar-fill');
+  fill.style.width = pct + '%';
+  fill.style.background = temperature >= threshold ? '#E24B4A' : '#378ADD';
+  document.getElementById('thr-marker').style.left = tpct + '%';
+  document.getElementById('bar-legend').textContent = temperature.toFixed(1) + '°C / ' + threshold + '°C';
+  document.getElementById('bar-legend').style.color = temperature >= threshold ? '#E24B4A' : '#378ADD';
+
+  // LCD
+  const tStr = temperature.toFixed(1).padEnd(4);
+  const hStr = String(Math.round(humidity)).padEnd(2);
+  document.getElementById('lcd-row0').textContent = `T:${tStr}C  H:${hStr}%  `;
+  document.getElementById('lcd-row1').textContent = `Set:${threshold}C  FAN ${fanOn?'ON ':'OFF'} ${autoMode?'A':'M'}`;
+
+  // Sparkline
+  drawSparkline();
+}
+
+function drawSparkline() {
+  const canvas = document.getElementById('sparkline');
+  const ctx    = canvas.getContext('2d');
+  canvas.width  = canvas.offsetWidth  * devicePixelRatio;
+  canvas.height = canvas.offsetHeight * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  const mn = Math.min(...history) - 1, mx = Math.max(...history) + 1;
+  ctx.clearRect(0,0,W,H);
+
+  // Threshold line
+  const thrY = H - ((threshold - mn)/(mx-mn)) * H;
+  ctx.setLineDash([4,4]);
+  ctx.strokeStyle = '#BA7517';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, thrY); ctx.lineTo(W, thrY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Area fill
+  ctx.beginPath();
+  history.forEach((v,i) => {
+    const x = (i/(history.length-1))*W;
+    const y = H - ((v-mn)/(mx-mn))*H;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+  ctx.fillStyle = 'rgba(55,138,221,0.15)';
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  history.forEach((v,i) => {
+    const x = (i/(history.length-1))*W;
+    const y = H - ((v-mn)/(mx-mn))*H;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle = '#378ADD';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Current dot
+  const lx = W, ly = H - ((temperature-mn)/(mx-mn))*H;
+  ctx.beginPath(); ctx.arc(lx,ly,4,0,Math.PI*2);
+  ctx.fillStyle = temperature >= threshold ? '#E24B4A' : '#378ADD';
+  ctx.fill();
+}
+
+function changeThreshold(delta) {
+  threshold = Math.max(15, Math.min(50, threshold + delta));
+  document.getElementById('thr-display').textContent = threshold;
+  document.getElementById('m-thr').textContent = threshold;
+  updateUI();
+}
+
+function saveThreshold() {
+  toast(`Threshold saved: ${threshold}°C (written to NVS flash)`);
+}
+
+function setMode(m) {
+  autoMode = m === 'auto';
+  document.getElementById('btn-auto').className   = autoMode ? 'active' : '';
+  document.getElementById('btn-manual').className = !autoMode ? 'active' : '';
+  document.getElementById('mode-badge').className = 'badge ' + m;
+  document.getElementById('mode-badge').textContent = m.toUpperCase();
+  document.getElementById('manual-row').style.display = autoMode ? 'none' : 'flex';
+  toast(`Switched to ${m.toUpperCase()} mode`);
+  updateUI();
+}
+
+function setFan(on) {
+  manFan = on;
+  toast(`Fan manually turned ${on ? 'ON' : 'OFF'}`);
+  updateUI();
+}
+
+// Init
+updateUI();
+setInterval(updateUI, 3000);
+</script>
